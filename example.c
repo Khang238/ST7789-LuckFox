@@ -122,7 +122,7 @@ static void screen_fonts(void) {
     lkfx_fill_rect(4, y, LKFX_W-8, 30, 0x2104);
     lkfx_text_wrap(6, y+2, LKFX_W-12, 28,
                    "Auto wrap: This is a long sentence that will wrap.",
-                   &lkfx_font_6x8, 1, LKFX_WHITE, LKFX_BLACK);
+                   &lkfx_font_6x8, 1, LKFX_WHITE, LKFX_TRANSPARENT);
 
     /* Hint */
     lkfx_fill_rect(0, LKFX_H-12, LKFX_W, 12, 0x2104);
@@ -349,25 +349,73 @@ static void screen_font_test(void) {
     while (lkfx_input_wait_btn() != LKFX_BTN_BACK);
 }
 
+/* ================================================================
+ * Màn hình VCOMS calibration
+ * Nửa trên đen thuần, nửa dưới RGB — chỉnh UP/DOWN đến khi đen đúng
+ * OK lưu vào /root/.vcoms, tự load lại khi khởi động
+ * ================================================================ */
+static void screen_vcoms_cal(void) {
+    uint8_t val = 0x19;
+    FILE *f = fopen("/root/.vcoms", "r");
+    if (f) { int v; if (fscanf(f, "%d", &v) == 1) val = (uint8_t)v; fclose(f); }
+
+    while (1) {
+        lkfx_fb_fill(LKFX_BLACK);
+        lkfx_fill_rect(0, LKFX_H/2, LKFX_W/3,   LKFX_H/2, LKFX_RED);
+        lkfx_fill_rect(LKFX_W/3,   LKFX_H/2, LKFX_W/3, LKFX_H/2, LKFX_GREEN);
+        lkfx_fill_rect(LKFX_W*2/3, LKFX_H/2, LKFX_W/3+1, LKFX_H/2, LKFX_BLUE);
+
+        char buf[24];
+        snprintf(buf, sizeof(buf), "VCOMS 0x%02X (%d)", val, val);
+        lkfx_text_center(LKFX_W/2, LKFX_H/2 - 20,
+                         buf, &lkfx_font_6x8, 2, LKFX_WHITE, LKFX_BLACK);
+
+        lkfx_fill_rect(0, LKFX_H-10, LKFX_W, 10, 0x2104);
+        lkfx_text_center(LKFX_W/2, LKFX_H-9,
+                         "U/D:adjust  OK:save  BACK:exit",
+                         &lkfx_font_6x8, 1, LKFX_GRAY, 0x2104);
+
+        lkfx_set_vcoms(val);
+        lkfx_fb_flush();
+
+        int btn = lkfx_input_wait_btn();
+        if      (btn == LKFX_BTN_UP   && val < 0x33) val++;
+        else if (btn == LKFX_BTN_DOWN && val > 0x00) val--;
+        else if (btn == LKFX_BTN_OK) {
+            f = fopen("/root/.vcoms", "w");
+            if (f) { fprintf(f, "%d\n", val); fclose(f); }
+            lkfx_toast("Saved!", 1000);
+        }
+        else if (btn == LKFX_BTN_BACK) break;
+    }
+}
 
 int main(void) {
     /* Khởi tạo display và input */
     lkfx_display_init();
     lkfx_input_init_default();
-    lkfx_theme_reset();  /* đảm bảo font pointer được set đúng lúc runtime */
+    lkfx_theme_reset();
 
-    /* Menu chính */
+    /* Backlight */
+    lkfx_bl_init();
+    lkfx_bl_set(128); /* sáng tối đa */
+
+    /* Load VCOMS đã lưu */
+    { FILE *f = fopen("/root/.vcoms", "r");
+      if (f) { int v; if (fscanf(f, "%d", &v) == 1) lkfx_set_vcoms((uint8_t)v); fclose(f); } }
+
     const char *main_items[] = {
         "Font test (debug)",
         "Shapes demo",
         "Font / Text demo",
         "Widget demo",
         "System info",
+        "VCOMS calibration",
         "Exit",
         NULL
     };
     const char *main_icons[] = {
-        "[F]", "[*]", "[T]", "[W]", "[I]", "[X]", NULL
+        "[F]", "[*]", "[T]", "[W]", "[I]", "[C]", "[X]", NULL
     };
 
     while (1) {
@@ -378,7 +426,8 @@ int main(void) {
         else if (sel == 2) screen_fonts();
         else if (sel == 3) screen_widgets();
         else if (sel == 4) screen_sysinfo();
-        else if (sel == 5 || sel < 0) {
+        else if (sel == 5) screen_vcoms_cal();
+        else if (sel == 6 || sel < 0) {
             lkfx_msgbox("Exit", "Goodbye!", LKFX_MB_OK);
             break;
         }
@@ -386,6 +435,7 @@ int main(void) {
 
     lkfx_fb_fill(LKFX_BLACK);
     lkfx_fb_flush();
+    lkfx_bl_deinit();
     lkfx_input_deinit();
     lkfx_display_deinit();
     return 0;

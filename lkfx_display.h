@@ -44,7 +44,9 @@
 #define LKFX_GRAY     0x8410
 #define LKFX_DARKGRAY 0x2104
 
-/* Giá trị đặc biệt: màu trong suốt (không vẽ background) */
+/* Giá trị đặc biệt: màu trong suốt (không vẽ background).
+ * Dùng 0x0001 — không trùng với bất kỳ màu RGB565 thông thường nào
+ * và đủ xa LKFX_BLACK (0x0000) để không nhầm lẫn. */
 #define LKFX_TRANSPARENT 0x0001
 
 /* Tạo màu RGB565 từ R8 G8 B8 */
@@ -110,5 +112,17 @@ void lkfx_fb_flush(void);
 
 /* Đẩy chỉ vùng hình chữ nhật (x,y,w,h) — nhanh hơn flush full */
 void lkfx_fb_flush_rect(int x, int y, int w, int h);
+
+/* Set VCOMS (0x00..0x3F). Tăng để màu đen đậm hơn, an toàn tối đa 0x33. */
+void lkfx_set_vcoms(uint8_t val);
+
+/*
+ * Backlight control — PWM10 (/sys/class/pwm/pwmchip10), GPIO54
+ * Gọi lkfx_bl_init() sau lkfx_display_init().
+ * brightness: 0..255 (0=tắt, 255=sáng tối đa)
+ */
+void lkfx_bl_init(void);
+void lkfx_bl_set(uint8_t brightness);  /* 0..255 */
+void lkfx_bl_deinit(void);
 
 #endif /* LKFX_DISPLAY_H */
